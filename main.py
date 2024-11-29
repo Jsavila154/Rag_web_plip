@@ -3,11 +3,13 @@
 
 # %%
 import streamlit as st
-from langchain.prompts import PromptTemplate
+from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.vectorstores import SKLearnVectorStore
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain.chains import RetrievalQA
+from langchain.chains import RetrievalQA, create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.messages import HumanMessage, AIMessage
 
 # %% [markdown]
 # Instanciamos el llm, el modelo de embedings y la base de datos vectorial
@@ -32,42 +34,24 @@ vector_store_connection = SKLearnVectorStore(embedding=embedding_function,
 
 # %%
 
-template = """Responde seimpre en español.
-Eres una persona de soporte que recibe preguntas de los usuarios y eres muy animado y atento.
-si la respuesta no la puedes dar con el contexto debes responder: 'No tengo información al respecto'.
-Siempre conesta como si el conocimiento fuera tu conocimiento.
-y solo basandote en el siguiente contexto:
-
-{context}
-
-Pregunta: {question}
-"""
-prompt = PromptTemplate.from_template(template)
+retriever = vector_store_connection.as_retriever()
 
 # %% [markdown]
 # Creamos la cadena para hacer preguntas
 
 # %%
-QA_chain = RetrievalQA.from_chain_type(
-    llm=llm,
-    chain_type="stuff",
-    retriever=vector_store_connection.as_retriever(),
-    chain_type_kwargs={"prompt": prompt},
-    return_source_documents=True 
-)
+# Creamos la funcion para formatear la respuesta
 
-
-#QA_chain.invoke(query)
-
-def generate_response(chain, query):
-    response = chain.invoke(query)
+def generate_response(response):
+    
     paginas = ""
-    for doc in response['source_documents']:
+    for doc in response['context']:
         paginas = f"{paginas}\n{doc.metadata['source']}"
-    if response['result'] == 'No tengo información al respecto.':
-        respuesta = f"response['result']\n\n Recuerda que solo puedo responder preguntas sobre plip"
+    if response['answer'] == 'No tengo información al respecto.\n':
+        respuesta = f"{response['answer']}\n\nRecuerda que solo puedo responder preguntas sobre plip"
     else:
-        respuesta = f"{response['result']} \nInformación obtenida de: \n{paginas}"
+        respuesta = f"{response['answer']}"
+    
     return respuesta
 
 # %%
@@ -76,12 +60,50 @@ st.set_page_config(
 )
 
 # %%
-st.title('Chat bot plip')
+st.title('Chat bot PliP')
 
-# %%
+# Asignamos la personalidad al bot dependiendo del valor que tenga el boton
+personality = st.text_input(
+    '¿Qué personalidad deberia tener el bot?',
+    value='Eres una persona de soporte que recibe preguntas de los usuarios y eres muy animado y atento.'
+)
+
+bot_description  = f"""Responde siempre en español.
+{personality}
+si la respuesta no la puedes dar con el contexto debes responder: 'No tengo información al respecto'.
+Siempre conesta como si el conocimiento fuera tu conocimiento.
+y solo basandote en el siguiente contexto: {{context}}
+
+"""
+
+
+#Creamos la cadena para responder preguntas
+
+
+#Creamos el espacio para que el usuario ponga su pregunta
+
+
+if 'chat_history' not in st.session_state:
+    st.session_state['chat_history'] = []
+
+#Creamos el prompt, con todo lo que hemos establecido
+
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", bot_description),
+        MessagesPlaceholder('chat_history'),
+        ("human", "{input}"),
+    ]
+)
+
+question_answer_chain = create_stuff_documents_chain(llm, prompt)
+
+chain = create_retrieval_chain(retriever, question_answer_chain)
+
 query_text = st.text_input(
     "¿Qué deseas saber?",
-    placeholder="Escribe tu pregunta aquí"
+    placeholder="Escribe tu pregunta aquí",
+    key='user_input'
 )
 
 # %% [markdown]
@@ -89,7 +111,7 @@ query_text = st.text_input(
 #  
 
 # %%
-result = []
+
 with st.form(
     "myform",
     clear_on_submit=True
@@ -104,12 +126,21 @@ with st.form(
             "Escribiendo..."
             ):
             
-            
-            response = generate_response(QA_chain, query_text)
+            response = chain.invoke({'input':query_text,
+                                    'personality':personality,
+                                    'chat_history': st.session_state['chat_history']})
+            response = generate_response(response)
+            st.session_state['chat_history'].append(HumanMessage(query_text))
+            st.session_state['chat_history'].append(AIMessage(response))
 
-            result.append(response)
-if len(result):
-    st.info(result)
+chat_display = ''
+for msg in st.session_state['chat_history']:
+    if isinstance(msg, HumanMessage):
+        chat_display += f'Humano: {msg.content}\n'
+    elif isinstance(msg, AIMessage):
+        chat_display += f'Bot: {msg.content}\n'
+st.text_area('Chat', value=chat_display, height=400, key='chat_area')
+
 
 
 
