@@ -139,7 +139,7 @@ for msg in st.session_state['chat_history']:
         chat_display += f'Humano: {msg.content}\n\n'
     elif isinstance(msg, AIMessage):
         chat_display += f'Bot: {msg.content}\n\n'
-text_input = ''
+st.text_input(value='')
 st.text_area('Chat', value=chat_display, height=400, key='chat_area')
 
 
