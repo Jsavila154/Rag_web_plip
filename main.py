@@ -136,9 +136,11 @@ with st.form(
 chat_display = ''
 for msg in st.session_state['chat_history']:
     if isinstance(msg, HumanMessage):
-        chat_display += f'Humano: {msg.content}\n'
+        chat_display += f'Humano: {msg.content}\n\n'
     elif isinstance(msg, AIMessage):
-        chat_display += f'Bot: {msg.content}\n'
+        chat_display += f'Bot: {msg.content}\n\n'
+query_text = ''
+st.write("Texto actual:", query_text)
 st.text_area('Chat', value=chat_display, height=400, key='chat_area')
 
 
