@@ -64,7 +64,7 @@ def generate_response(chain, query):
     paginas = ""
     for doc in response['source_documents']:
         paginas = f"{paginas}\n{doc.metadata['source']}"
-    if response['result'] == 'No tengo información al respecto':
+    if response['result'] == 'No tengo información al respecto.':
         respuesta = f"response['result']\n\n Recuerda que solo puedo responder preguntas sobre plip"
     else:
         respuesta = f"{response['result']} \nInformación obtenida de: \n{paginas}"
@@ -109,7 +109,7 @@ with st.form(
 
             result.append(response)
 if len(result):
-    st.info(response)
+    st.info(result)
 
 
 
